@@ -1,5 +1,7 @@
 # Whiteboard Playground
 
+[Click here](https://whiteboard-playground.vercel.app/) to see the project live.
+
 ## Overview
 
 Whiteboard Playground is an interactive project designed to explore the capabilities of state machines and the Canvas API for drawing and manipulating shapes on a virtual whiteboard. This project provides a dynamic environment for users to create, select, and modify shapes in a visually intuitive manner.
