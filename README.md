@@ -4,7 +4,7 @@
 
 ## Overview
 
-Whiteboard Playground is an interactive project designed to explore the capabilities of state machines and the Canvas API for drawing and manipulating shapes on a virtual whiteboard. This project provides a dynamic environment for users to create, select, and modify shapes in a visually intuitive manner.
+Whiteboard Playground is an interactive project designed to explore the capabilities of state machines and the Canvas API for drawing and manipulating shapes on a virtual whiteboard.
 
 ## Features
 
@@ -20,6 +20,16 @@ Whiteboard Playground is an interactive project designed to explore the capabili
 - **State Machines**: Utilized to manage the complex states of the application efficiently.
 - **Canvas API**: Used for rendering and manipulating the graphical content on the whiteboard.
 
+## Type guards and type utils
+
+### `type-guards.ts`
+
+This file contains a collection of type guard functions — functions that perform runtime checks to ensure that a value conforms to a specific type. They are useful for narrowing down types in TypeScript, providing more type safety and reducing the likelihood of runtime errors. Examples include checks for `null`, `undefined`, strings, arrays, and more.
+
+### `type-utils.ts`
+
+This file defines various utility types that are used throughout the project. These types help in creating more expressive and flexible type definitions. Examples include `Nil` (a union of `null` and `undefined`), `Undefinable`, `Nullable`, `Nilable`, and `NonEmptyArray`. These utility types simplify handling optional and nullable values, as well as ensuring non-empty arrays.
+
 ## Folder Structure
 
 The project is organized into several key directories, each serving a specific purpose in the application architecture:
@@ -32,15 +42,15 @@ The project is organized into several key directories, each serving a specific p
 > aware of the application layer and the application layer is not
 > aware of the ui layer.
 
-#### Dependency Inversion explained
+### Dependency Inversion explained
 
-The following ruleset is put in place and **enforced by ESlint** to help us maintain this principle so that the pattern remains consistent as this project begins to scale over time.
+The following ruleset could be put in place and **enforced by ESlint** to help maintain this principle so that the pattern remains consistent as this project begins to scale over time.
 
 1. Anything within a given `/context` **can not** import from another `/context` directory.
 
-   - if something needs to be used within multiple `/context` directories **and** it's only scoped to the `/Editor` project, it should be moved into and imported from `/Editor/shared`.
+   - if something needs to be used within multiple `/context` directories **and** it's currently only scoped to the `/context/whiteboard` project, it should be moved into and imported from `/shared`.
 
-2. Within a given `/context` (or within the `/shared`) directory, the following direction of imports should be followed: (ESlint will help remind us)
+2. Within a given `/context` (or within the `/shared`) directory, the following direction of imports should be followed: (ESlint could help remind us)
 
 ```
 /domain              # domain can not import from application or infrastructure
