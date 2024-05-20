@@ -14,12 +14,6 @@
     --background-start-rgb: 36, 60, 90;
     --background-end-rgb: 30, 41, 59;
   }
-
-  /* .dark :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 36, 60, 90;
-    --background-end-rgb: 30, 41, 59;
-  } */
 }
 
 body {

@@ -4,6 +4,14 @@ import { Nullable } from '@/shared/application/type-utils';
 import { isNotNil } from '@/shared/application/type-guards';
 import { noOpFn } from '@/shared/application/utils';
 
+/**
+ * The function calculates the Euclidean distance between two points
+ * a and b in a 2D space.
+ *
+ * @param a - The first point
+ * @param b - The second point
+ * @returns The Euclidean distance between the two points
+ */
 export const distance = (
   a: { x: number; y: number },
   b: { x: number; y: number }
@@ -18,22 +26,6 @@ const nearPoint = (
 ) => {
   // including the 5 here as an offset to help with proximity detection
   return Math.abs(x - x1) < 5 && Math.abs(y - y1) < 5 ? name : null;
-};
-
-export const onLine = (
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  x: number,
-  y: number,
-  maxDistance = 1
-) => {
-  const a = { x: x1, y: y1 };
-  const b = { x: x2, y: y2 };
-  const c = { x, y };
-  const offset = distance(a, b) - (distance(a, c) + distance(b, c));
-  return Math.abs(offset) < maxDistance ? 'inside' : null;
 };
 
 export const positionWithinElement = (

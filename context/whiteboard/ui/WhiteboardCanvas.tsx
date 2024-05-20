@@ -8,6 +8,7 @@ import {
   PointerEvent as ReactPointerEvent,
   useCallback
 } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import cx from 'classnames';
 import {
   FiGrid,
@@ -17,17 +18,16 @@ import {
   FiSun,
   FiMoon
 } from 'react-icons/fi';
-import { IconButton } from './IconButton';
 import { useMachine } from '@xstate/react';
-import { whiteboardStateMachine } from '../infrastructure/whiteboardStateMachine';
-
 import { match } from 'ts-pattern';
+
 import {
   isNil,
   isNonEmptyArray,
   isNotNil
 } from '@/shared/application/type-guards';
 import { noOpFn } from '@/shared/application/utils';
+import { IconButton } from '@/context/whiteboard/ui/IconButton';
 import {
   cursorForPosition,
   drawElement,
@@ -35,6 +35,7 @@ import {
   resizedCoordinates
 } from '@/context/whiteboard/application';
 import { DARK_MODE_COLOR, LIGHT_MODE_COLOR } from '@/context/whiteboard/domain';
+import { whiteboardStateMachine } from '@/context/whiteboard/infrastructure/whiteboardStateMachine';
 
 export const WhiteboardCanvas = () => {
   const [showGrid, setShowGrid] = useState(true);
@@ -48,6 +49,7 @@ export const WhiteboardCanvas = () => {
     const canvas = canvasRef.current;
     const toolbar = toolbarRef.current;
     if (isNil(canvas) || isNil(toolbar)) return;
+
     const parent = canvas.parentElement;
     if (isNotNil(parent)) {
       const { width, height } = parent.getBoundingClientRect();
@@ -115,6 +117,7 @@ export const WhiteboardCanvas = () => {
   }, [isDarkMode]);
 
   useEffect(() => {
+    // intentionally left behind for viewers to inspect state transitions
     console.log('state', state);
   }, [state]);
 
@@ -274,11 +277,9 @@ export const WhiteboardCanvas = () => {
         .with('resizing', () => {
           if (
             isNonEmptyArray(state.context.elementsInProgress) &&
-            state.context.selectedElements.size > 0
+            state.context.selectedElements.size === 1
           ) {
-            // todo: account for multiple
             const { position } = Array.from(state.context.selectedElements)[0];
-            console.log('*** position', position);
             const { id, x1, y1, x2, y2, type } =
               state.context.elementsInProgress[0];
             if (isNotNil(position)) {
@@ -370,59 +371,66 @@ export const WhiteboardCanvas = () => {
         onPointerMove={onMouseMove}
         onPointerUp={onMouseUp}
       ></canvas>
-      <div ref={toolbarRef} className="flex items-center justify-between">
-        <IconButton
-          onClick={() => {
-            setIsDarkMode(!isDarkMode);
-            send({ type: 'reset' });
-          }}
-          icon={isDarkMode ? <FiMoon /> : <FiSun />}
-          label="Toggle Theme"
-        />
-        <div className="flex gap-4 items-center justify-center">
+      <AnimatePresence>
+        <motion.div
+          ref={toolbarRef}
+          className="flex items-center justify-between"
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 100, opacity: 0 }}
+          transition={{ duration: 0.5 }}
+        >
           <IconButton
             onClick={() => {
-              send({ type: 'initiate_select' });
+              setIsDarkMode(!isDarkMode);
+              send({ type: 'reset' });
             }}
-            icon={<FiMousePointer />}
-            shouldHighlight={
-              state.matches('select') ||
-              state.matches('repositioning') ||
-              state.matches('resizing')
-            }
+            icon={isDarkMode ? <FiMoon /> : <FiSun />}
+            label="Toggle Theme"
           />
+          <div className="flex gap-4 items-center justify-center">
+            <IconButton
+              onClick={() => {
+                send({ type: 'initiate_select' });
+              }}
+              icon={<FiMousePointer />}
+              shouldHighlight={
+                state.matches('select') ||
+                state.matches('repositioning') ||
+                state.matches('resizing')
+              }
+            />
+            <IconButton
+              onClick={() => {
+                send({
+                  type: 'initiate_draw',
+                  shape: 'circle'
+                });
+              }}
+              icon={<FiCircle />}
+              shouldHighlight={state.context.selectedShape === 'circle'}
+            />
+            <IconButton
+              onClick={() => {
+                send({
+                  type: 'initiate_draw',
+                  shape: 'rectangle'
+                });
+              }}
+              icon={<FiSquare />}
+              shouldHighlight={state.context.selectedShape === 'rectangle'}
+            />
+          </div>
           <IconButton
             onClick={() => {
-              console.log('initiate draw with circle');
-              send({
-                type: 'initiate_draw',
-                shape: 'circle'
-              });
+              setShowGrid(!showGrid);
+              send({ type: 'reset' });
             }}
-            icon={<FiCircle />}
-            shouldHighlight={state.context.selectedShape === 'circle'}
+            icon={<FiGrid />}
+            label="Toggle Grid"
           />
-          <IconButton
-            onClick={() => {
-              console.log('initiate draw with rectangle');
-              send({
-                type: 'initiate_draw',
-                shape: 'rectangle'
-              });
-            }}
-            icon={<FiSquare />}
-            shouldHighlight={state.context.selectedShape === 'rectangle'}
-          />
-        </div>
-        <IconButton
-          onClick={() => {
-            setShowGrid(!showGrid);
-            send({ type: 'reset' });
-          }}
-          icon={<FiGrid />}
-          label="Toggle Grid"
-        />
-      </div>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 };

@@ -30,6 +30,12 @@ This file contains a collection of type guard functions — functions that perfo
 
 This file defines various utility types that are used throughout the project. These types help in creating more expressive and flexible type definitions. Examples include `Nil` (a union of `null` and `undefined`), `Undefinable`, `Nullable`, `Nilable`, and `NonEmptyArray`. These utility types simplify handling optional and nullable values, as well as ensuring non-empty arrays.
 
+## Pattern matching
+
+This project also makes use of `match` from `ts-pattern` to perform
+exhaustive pattern matching. This is useful for ensuring that all
+cases are handled in a switch statement. Additionally, unlike switch statements, which are not expressions, `match` from `ts-pattern` is an expression. This means it can directly return values, making it more versatile.
+
 ## Folder Structure
 
 The project is organized into several key directories, each serving a specific purpose in the application architecture:
