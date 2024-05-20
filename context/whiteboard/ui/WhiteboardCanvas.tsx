@@ -22,7 +22,11 @@ import { useMachine } from '@xstate/react';
 import { whiteboardStateMachine } from '../infrastructure/whiteboardStateMachine';
 
 import { match } from 'ts-pattern';
-import { isNil, isNotNil } from '@/shared/application/type-guards';
+import {
+  isNil,
+  isNonEmptyArray,
+  isNotNil
+} from '@/shared/application/type-guards';
 import { noOpFn } from '@/shared/application/utils';
 import {
   cursorForPosition,
@@ -59,12 +63,14 @@ export const WhiteboardCanvas = () => {
 
     context.save();
 
-    const currentWorkInProgress = state.context.elementInProgress;
+    const currentWorkInProgress = state.context.elementsInProgress;
     state.context.elements
       .filter(
         (element) =>
-          currentWorkInProgress?.id !== element.id ||
-          state.context.selectedElement?.id !== element.id
+          !currentWorkInProgress.some((el) => el.id === element.id) &&
+          !Array.from(state.context.selectedElements).some(
+            (sel) => sel.id === element.id
+          )
       )
       .forEach((element) => {
         drawElement(
@@ -75,21 +81,25 @@ export const WhiteboardCanvas = () => {
       });
 
     if (isNotNil(currentWorkInProgress)) {
-      drawElement(
-        context,
-        currentWorkInProgress,
-        isDarkMode ? DARK_MODE_COLOR : LIGHT_MODE_COLOR,
-        true
-      );
+      currentWorkInProgress.forEach((element) => {
+        drawElement(
+          context,
+          element,
+          isDarkMode ? DARK_MODE_COLOR : LIGHT_MODE_COLOR,
+          true
+        );
+      });
     }
 
-    if (isNotNil(state.context.selectedElement) && state.matches('select')) {
-      drawElement(
-        context,
-        state.context.selectedElement,
-        isDarkMode ? DARK_MODE_COLOR : LIGHT_MODE_COLOR,
-        true
-      );
+    if (state.context.selectedElements.size > 0 && state.matches('select')) {
+      state.context.selectedElements.forEach((element) => {
+        drawElement(
+          context,
+          element,
+          isDarkMode ? DARK_MODE_COLOR : LIGHT_MODE_COLOR,
+          true
+        );
+      });
     }
     context.restore();
   }, [state, isDarkMode]);
@@ -134,10 +144,7 @@ export const WhiteboardCanvas = () => {
           }
         })
         .with('select', () => {
-          // todo: account for multiple elements being detected at a position
-          //       - grab the dimensions of the biggest element
-          //       - use the dimensions to create a bounding box
-          //       - use the bounding box to create a selection
+          const isControlPressed = mouseEvent.ctrlKey || mouseEvent.metaKey;
           const elementAtPosition = getElementAtPosition(
             offsetX,
             offsetY,
@@ -153,14 +160,14 @@ export const WhiteboardCanvas = () => {
                 offsetX: elementOffsetX,
                 offsetY: elementOffsetY,
                 position: elementAtPosition.position
-              }
+              },
+              isMultiSelect: isControlPressed
             });
             if (isNotNil(elementAtPosition.position)) {
               match(elementAtPosition.position)
                 .with('inside', () => {
                   send({
-                    type: 'start_repositioning',
-                    element: elementAtPosition.element
+                    type: 'start_repositioning'
                   });
                 })
                 .otherwise(() => {
@@ -183,8 +190,8 @@ export const WhiteboardCanvas = () => {
       match(state.value)
         .with('drawing', () => {
           // grab the current work in progress
-          if (isNotNil(state.context.elementInProgress)) {
-            const { id, x1, y1, type } = state.context.elementInProgress;
+          if (isNonEmptyArray(state.context.elementsInProgress)) {
+            const { id, x1, y1, type } = state.context.elementsInProgress[0];
             send({
               type: 'continue_drawing',
               element: {
@@ -211,57 +218,89 @@ export const WhiteboardCanvas = () => {
         })
         .with('repositioning', () => {
           if (
-            isNotNil(state.context.elementInProgress) &&
-            isNotNil(state.context.selectedElement)
+            isNonEmptyArray(state.context.elementsInProgress) &&
+            state.context.selectedElements.size > 0
           ) {
-            const { offsetX: originalOffsetX, offsetY: originalOffsetY } =
-              state.context.selectedElement;
-            const { id, x1, y1, x2, y2, type } =
-              state.context.elementInProgress;
-            const width = x2 - x1;
-            const height = y2 - y1;
-            const newX = offsetX - originalOffsetX;
-            const newY = offsetY - originalOffsetY;
-            send({
-              type: 'continue_repositioning',
-              element: {
+            // todo: account for multiple elements being detected at a position
+            // const { offsetX: originalOffsetX, offsetY: originalOffsetY } =
+            //   state.context.selectedElements.values().next().value;
+            // const { id, x1, y1, x2, y2, type } =
+            //   state.context.elementInProgress;
+            // const width = x2 - x1;
+            // const height = y2 - y1;
+            // const newX = offsetX - originalOffsetX;
+            // const newY = offsetY - originalOffsetY;
+            // send({
+            //   type: 'continue_repositioning',
+            //   element: {
+            //     id,
+            //     x1: newX,
+            //     y1: newY,
+            //     x2: newX + width,
+            //     y2: newY + height,
+            //     type
+            //   }
+            // });
+            const updatedElements = Array.from(
+              state.context.selectedElements
+            ).map((selectedElement) => {
+              const { offsetX: originalOffsetX, offsetY: originalOffsetY } =
+                selectedElement;
+              const { id, x1, y1, x2, y2, type } = selectedElement;
+              const width = x2 - x1;
+              const height = y2 - y1;
+              const newX = offsetX - originalOffsetX;
+              const newY = offsetY - originalOffsetY;
+              return {
                 id,
                 x1: newX,
                 y1: newY,
                 x2: newX + width,
                 y2: newY + height,
                 type
-              }
+              };
+            });
+
+            console.log('moving', updatedElements.length);
+
+            send({
+              type: 'continue_repositioning',
+              elements: updatedElements
             });
           }
         })
         .with('resizing', () => {
           if (
-            isNotNil(state.context.elementInProgress) &&
-            isNotNil(state.context?.selectedElement?.position)
+            isNonEmptyArray(state.context.elementsInProgress) &&
+            state.context.selectedElements.size > 0
           ) {
-            const { position } = state.context.selectedElement;
+            // todo: account for multiple
+            const { position } = state.context.selectedElements
+              .values()
+              .next().value;
             console.log('*** position', position);
             const { id, x1, y1, x2, y2, type } =
-              state.context.elementInProgress;
-            const resized = resizedCoordinates(offsetX, offsetY, position, {
-              x1,
-              y1,
-              x2,
-              y2
-            });
-            if (isNotNil(resized)) {
-              send({
-                type: 'continue_resizing',
-                element: {
-                  id,
-                  x1: resized.x1,
-                  y1: resized.y1,
-                  x2: resized.x2,
-                  y2: resized.y2,
-                  type
-                }
+              state.context.elementsInProgress[0];
+            if (isNotNil(position)) {
+              const resized = resizedCoordinates(offsetX, offsetY, position, {
+                x1,
+                y1,
+                x2,
+                y2
               });
+              if (isNotNil(resized)) {
+                send({
+                  type: 'continue_resizing',
+                  element: {
+                    id,
+                    x1: resized.x1,
+                    y1: resized.y1,
+                    x2: resized.x2,
+                    y2: resized.y2,
+                    type
+                  }
+                });
+              }
             }
           }
         })
@@ -273,7 +312,7 @@ export const WhiteboardCanvas = () => {
   const onMouseUp = () => {
     match(state.value)
       .with('select', () => {
-        send({ type: 'deselect_element' });
+        send({ type: 'deselect_all' });
       })
       .with('drawing', () => {
         send({ type: 'finish_drawing' });
@@ -303,12 +342,13 @@ export const WhiteboardCanvas = () => {
       if (
         (event.key === 'Delete' || event.key === 'Backspace') &&
         state.matches('select') &&
-        isNotNil(state.context.selectedElement)
+        state.context.selectedElements.size > 0
       ) {
         console.log('removing element');
+        // todo account for more
         send({
           type: 'remove_element',
-          elementId: state.context.selectedElement.id
+          elementId: state.context.selectedElements.values().next().value.id
         });
       }
     };

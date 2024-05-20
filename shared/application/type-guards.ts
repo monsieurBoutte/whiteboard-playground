@@ -1,4 +1,5 @@
-import { Nil, Undefinable } from './type-utils';
+import { UnknownRecord } from 'type-fest';
+import { Nil, Nilable, NonEmptyArray, Undefinable } from './type-utils';
 
 export const isNull = (x: unknown): x is null => x === null;
 
@@ -20,3 +21,12 @@ export const isEmptyString = (x: unknown): x is '' => isString(x) && x === '';
 
 export const isNonEmptyString = (x: unknown): x is string =>
   isString(x) && x !== '';
+
+export const isArray = (x: unknown): x is unknown[] => x instanceof Array;
+
+export const isEmptyArray = (x: unknown): x is never[] =>
+  isArray(x) && x.length === 0;
+
+export const isNonEmptyArray = <T>(
+  x: Nilable<T[] | UnknownRecord>
+): x is NonEmptyArray<T> => isArray(x) && x.length > 0;

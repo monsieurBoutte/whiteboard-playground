@@ -75,7 +75,7 @@ export const positionWithinElement = (
 export const getElementAtPosition = (
   x: number,
   y: number,
-  elements: WhiteboardElement[]
+  elements: Array<WhiteboardElement>
 ): Nullable<{ element: WhiteboardElement; position: Nullable<Position> }> => {
   const foundElement = elements.find((element) => {
     const position = positionWithinElement(x, y, element);

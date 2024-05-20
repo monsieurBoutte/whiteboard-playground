@@ -1,6 +1,6 @@
 import { Nullable } from '@/shared/application/type-utils';
 import { createMachine, assign } from 'xstate';
-import { isNotNil } from '@/shared/application/type-guards';
+import { isNonEmptyArray, isNotNil } from '@/shared/application/type-guards';
 import { adjustElementCoordinates } from '@/context/whiteboard/application';
 import {
   SelectedWhiteBoardElement,
@@ -9,10 +9,10 @@ import {
 } from '@/context/whiteboard/domain';
 
 interface WhiteboardContext {
-  selectedElement: Nullable<SelectedWhiteBoardElement>;
+  selectedElements: Set<SelectedWhiteBoardElement>;
   selectedShape: Nullable<Shape>;
   elements: Array<WhiteboardElement>;
-  elementInProgress: Nullable<WhiteboardElement>;
+  elementsInProgress: Array<WhiteboardElement>;
 }
 
 type WhiteboardEvent =
@@ -24,15 +24,20 @@ type WhiteboardEvent =
     }
   | { type: 'continue_drawing'; element: WhiteboardElement }
   | { type: 'finish_drawing' }
-  | { type: 'select_element'; element: SelectedWhiteBoardElement }
+  | {
+      type: 'select_element';
+      element: SelectedWhiteBoardElement;
+      isMultiSelect: boolean;
+    }
   | { type: 'remove_element'; elementId: string }
-  | { type: 'deselect_element' }
+  | { type: 'deselect_element'; elementId: string }
+  | { type: 'deselect_all' }
   | { type: 'start_resizing'; element: WhiteboardElement }
   | { type: 'continue_resizing'; element: WhiteboardElement }
   | { type: 'cancel_resizing' }
   | { type: 'finish_resizing' }
-  | { type: 'start_repositioning'; element: WhiteboardElement }
-  | { type: 'continue_repositioning'; element: WhiteboardElement }
+  | { type: 'start_repositioning' }
+  | { type: 'continue_repositioning'; elements: Array<WhiteboardElement> }
   | { type: 'cancel_repositioning' }
   | { type: 'finish_repositioning' }
   | { type: 'reset' };
@@ -43,9 +48,9 @@ export const whiteboardStateMachine = createMachine({
     events: {} as WhiteboardEvent
   },
   context: {
-    selectedElement: null,
+    selectedElements: new Set<SelectedWhiteBoardElement>(),
     selectedShape: null,
-    elementInProgress: null,
+    elementsInProgress: [],
     elements: []
   },
   id: 'whiteboard',
@@ -54,9 +59,9 @@ export const whiteboardStateMachine = createMachine({
     idle: {
       entry: [
         assign({
-          selectedElement: () => null,
+          selectedElements: () => new Set<SelectedWhiteBoardElement>(),
           selectedShape: () => null,
-          elementInProgress: () => null
+          elementsInProgress: () => []
         })
       ],
       on: {
@@ -75,7 +80,7 @@ export const whiteboardStateMachine = createMachine({
           target: 'select',
           actions: [
             assign({
-              selectedElement: () => null
+              selectedElements: () => new Set<SelectedWhiteBoardElement>()
             }),
             () => {
               console.log('Transitioning to select state');
@@ -97,15 +102,40 @@ export const whiteboardStateMachine = createMachine({
       ],
       on: {
         select_element: {
-          actions: assign({
-            selectedElement: ({ event }) => event.element
-          })
+          actions: [
+            ({ event }) => {
+              console.log('selecting element', event);
+            },
+            assign({
+              selectedElements: ({ context, event }) => {
+                const newSelectedElements = new Set(context.selectedElements);
+                const elementExists = newSelectedElements.has(event.element);
+
+                if (event.isMultiSelect) {
+                  if (elementExists) {
+                    console.log('*** removing element', event.element);
+                    // Remove the element if it already exists in a multi-select scenario
+                    newSelectedElements.delete(event.element);
+                  } else {
+                    console.log('*** adding element', event.element);
+                    // Add the element if it doesn't exist in a multi-select scenario
+                    newSelectedElements.add(event.element);
+                  }
+                } else {
+                  // Always replace the current selection with the new element, even if it's already selected
+                  newSelectedElements.clear();
+                  newSelectedElements.add(event.element);
+                }
+                return newSelectedElements;
+              }
+            })
+          ]
         },
         start_resizing: {
           target: 'resizing',
           actions: [
             assign({
-              elementInProgress: ({ event }) => event.element
+              elementsInProgress: ({ event }) => [event.element]
             }),
             () => {
               console.log('Transitioning to resizing state');
@@ -116,7 +146,8 @@ export const whiteboardStateMachine = createMachine({
           target: 'repositioning',
           actions: [
             assign({
-              elementInProgress: ({ event }) => event.element
+              elementsInProgress: ({ context }) =>
+                Array.from(context.selectedElements)
             }),
             () => {
               console.log('Transitioning to repositioning state');
@@ -132,13 +163,18 @@ export const whiteboardStateMachine = createMachine({
                 )
             }),
             assign({
-              selectedElement: () => null
+              selectedElements: () => new Set<SelectedWhiteBoardElement>()
             })
           ]
         },
         deselect_element: {
           actions: assign({
-            selectedElement: () => null
+            selectedElements: () => new Set<SelectedWhiteBoardElement>()
+          })
+        },
+        deselect_all: {
+          actions: assign({
+            selectedElements: () => new Set<SelectedWhiteBoardElement>()
           })
         },
         initiate_draw: {
@@ -159,7 +195,7 @@ export const whiteboardStateMachine = createMachine({
     draw: {
       entry: [
         assign({
-          selectedElement: () => null
+          selectedElements: () => new Set<SelectedWhiteBoardElement>()
         }),
         () => {
           console.log('Entering draw state');
@@ -188,7 +224,7 @@ export const whiteboardStateMachine = createMachine({
           target: 'drawing',
           actions: [
             assign({
-              elementInProgress: ({ event }) => event.element
+              elementsInProgress: ({ event }) => [event.element]
             }),
             () => {
               console.log('Transitioning to drawing state');
@@ -201,7 +237,7 @@ export const whiteboardStateMachine = createMachine({
     drawing: {
       entry: [
         assign({
-          selectedElement: () => null
+          selectedElements: () => new Set<SelectedWhiteBoardElement>()
         }),
         () => {
           console.log('Entering drawing state');
@@ -211,7 +247,7 @@ export const whiteboardStateMachine = createMachine({
         continue_drawing: {
           actions: [
             assign({
-              elementInProgress: ({ event }) => event.element
+              elementsInProgress: ({ event }) => [event.element]
             })
           ]
         },
@@ -220,22 +256,26 @@ export const whiteboardStateMachine = createMachine({
           actions: [
             assign({
               elements: ({ context }) =>
-                isNotNil(context.elementInProgress)
-                  ? [...context.elements, context.elementInProgress]
+                isNonEmptyArray(context.elementsInProgress)
+                  ? [...context.elements, ...context.elementsInProgress]
                   : context.elements,
-              selectedElement: ({ context }) => {
-                return isNotNil(context.elementInProgress)
-                  ? {
-                      ...context.elementInProgress,
-                      offsetX: 0,
-                      offsetY: 0,
-                      position: null
-                    }
-                  : null;
+              selectedElements: ({ context }) => {
+                const newSelectedElements =
+                  new Set<SelectedWhiteBoardElement>();
+                if (isNonEmptyArray(context.elementsInProgress)) {
+                  const updatedElement = {
+                    ...context.elementsInProgress[0],
+                    offsetX: 0,
+                    offsetY: 0,
+                    position: null
+                  };
+                  newSelectedElements.add(updatedElement);
+                }
+                return newSelectedElements;
               }
             }),
             assign({
-              elementInProgress: () => null
+              elementsInProgress: () => []
             })
           ]
         }
@@ -248,14 +288,14 @@ export const whiteboardStateMachine = createMachine({
         continue_resizing: {
           actions: [
             assign({
-              elementInProgress: ({ event }) => event.element
+              elementsInProgress: ({ event }) => [event.element]
             })
           ]
         },
         cancel_resizing: {
           target: 'select',
           actions: assign({
-            elementInProgress: () => null
+            elementsInProgress: () => []
           })
         },
         finish_resizing: {
@@ -265,34 +305,38 @@ export const whiteboardStateMachine = createMachine({
               elements: ({ context }) =>
                 context.elements.map((element) => {
                   if (
-                    isNotNil(context.elementInProgress) &&
-                    element.id === context.elementInProgress.id
+                    isNonEmptyArray(context.elementsInProgress) &&
+                    element.id === context.elementsInProgress[0].id
                   ) {
                     const updatedCoordinates = adjustElementCoordinates(
-                      context.elementInProgress
+                      context.elementsInProgress[0]
                     );
                     // overwrite the previous element with the new attributes
                     return {
                       ...updatedCoordinates,
-                      id: context.elementInProgress.id,
-                      type: context.elementInProgress.type
+                      id: context.elementsInProgress[0].id,
+                      type: context.elementsInProgress[0].type
                     };
                   }
                   return element;
                 }),
-              selectedElement: ({ context }) => {
-                return isNotNil(context.elementInProgress)
-                  ? {
-                      ...context.elementInProgress,
-                      offsetX: 0,
-                      offsetY: 0,
-                      position: null
-                    }
-                  : null;
+              selectedElements: ({ context }) => {
+                const newSelectedElements =
+                  new Set<SelectedWhiteBoardElement>();
+                if (isNonEmptyArray(context.elementsInProgress)) {
+                  const updatedElement = {
+                    ...context.elementsInProgress[0],
+                    offsetX: 0,
+                    offsetY: 0,
+                    position: null
+                  };
+                  newSelectedElements.add(updatedElement);
+                }
+                return newSelectedElements;
               }
             }),
             assign({
-              elementInProgress: () => null
+              elementsInProgress: () => []
             })
           ]
         }
@@ -303,13 +347,13 @@ export const whiteboardStateMachine = createMachine({
       on: {
         continue_repositioning: {
           actions: assign({
-            elementInProgress: ({ event }) => event.element
+            elementsInProgress: ({ event }) => event.elements
           })
         },
         cancel_repositioning: {
           target: 'select',
           actions: assign({
-            elementInProgress: () => null
+            elementsInProgress: () => []
           })
         },
         finish_repositioning: {
@@ -319,27 +363,41 @@ export const whiteboardStateMachine = createMachine({
               elements: ({ context }) =>
                 context.elements.map((element) => {
                   if (
-                    isNotNil(context.elementInProgress) &&
-                    element.id === context.elementInProgress.id
+                    isNonEmptyArray(context.elementsInProgress) &&
+                    element.id === context.elementsInProgress[0].id
                   ) {
                     // overwrite the previous element with the new attributes
-                    return context.elementInProgress;
+                    return context.elementsInProgress[0];
                   }
                   return element;
                 }),
-              selectedElement: ({ context }) => {
-                return isNotNil(context.elementInProgress)
-                  ? {
-                      ...context.elementInProgress,
-                      offsetX: 0,
-                      offsetY: 0,
-                      position: null
+              selectedElements: ({ context }) => {
+                const newSelectedElements = new Set<SelectedWhiteBoardElement>(
+                  context.selectedElements
+                );
+                if (isNonEmptyArray(context.elementsInProgress)) {
+                  const updatedElement = {
+                    ...context.elementsInProgress[0],
+                    offsetX: 0,
+                    offsetY: 0,
+                    position: null
+                  };
+
+                  // Find and remove the existing element with the same id
+                  newSelectedElements.forEach((el) => {
+                    if (el.id === updatedElement.id) {
+                      newSelectedElements.delete(el);
                     }
-                  : null;
+                  });
+
+                  // Add the updated element
+                  newSelectedElements.add(updatedElement);
+                }
+                return newSelectedElements;
               }
             }),
             assign({
-              elementInProgress: () => null
+              elementsInProgress: () => []
             })
           ]
         }
