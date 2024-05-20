@@ -29,7 +29,7 @@ type WhiteboardEvent =
       element: SelectedWhiteBoardElement;
       isMultiSelect: boolean;
     }
-  | { type: 'remove_element'; elementId: string }
+  | { type: 'remove_elements' }
   | { type: 'deselect_element'; elementId: string }
   | { type: 'deselect_all' }
   | { type: 'start_resizing'; element: WhiteboardElement }
@@ -154,12 +154,15 @@ export const whiteboardStateMachine = createMachine({
             }
           ]
         },
-        remove_element: {
+        remove_elements: {
           actions: [
             assign({
-              elements: ({ context, event }) =>
+              elements: ({ context }) =>
                 context.elements.filter(
-                  (element) => element.id !== event.elementId
+                  (element) =>
+                    !Array.from(context.selectedElements).some(
+                      (selected) => selected.id === element.id
+                    )
                 )
             }),
             assign({

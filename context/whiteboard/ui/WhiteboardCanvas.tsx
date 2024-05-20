@@ -344,11 +344,8 @@ export const WhiteboardCanvas = () => {
         state.matches('select') &&
         state.context.selectedElements.size > 0
       ) {
-        console.log('removing element');
-        // todo account for more
         send({
-          type: 'remove_element',
-          elementId: state.context.selectedElements.values().next().value.id
+          type: 'remove_elements'
         });
       }
     };
