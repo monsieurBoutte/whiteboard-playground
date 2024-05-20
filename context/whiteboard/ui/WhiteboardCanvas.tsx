@@ -5,7 +5,7 @@ import {
   useEffect,
   useRef,
   useLayoutEffect,
-  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
   useCallback
 } from 'react';
 import cx from 'classnames';
@@ -86,7 +86,8 @@ export const WhiteboardCanvas = () => {
           context,
           element,
           isDarkMode ? DARK_MODE_COLOR : LIGHT_MODE_COLOR,
-          true
+          true,
+          state.context.selectedElements.size > 1
         );
       });
     }
@@ -97,7 +98,8 @@ export const WhiteboardCanvas = () => {
           context,
           element,
           isDarkMode ? DARK_MODE_COLOR : LIGHT_MODE_COLOR,
-          true
+          true,
+          state.context.selectedElements.size > 1
         );
       });
     }
@@ -116,17 +118,15 @@ export const WhiteboardCanvas = () => {
     console.log('state', state);
   }, [state]);
 
-  // window.state = state;
-
   const onMouseDown = useCallback(
-    (mouseEvent: ReactMouseEvent<HTMLCanvasElement, MouseEvent>) => {
+    (mouseEvent: ReactPointerEvent<HTMLCanvasElement>) => {
       /**
        * note: we are using offsetX and offsetY here instead of clientX and clientY
        * because the offset grabs the mouse position relative to the top left of the canvas
        * while clientX and clientY grab the mouse position relative to the top left of the
        * viewport
        */
-      const { offsetX, offsetY } = mouseEvent.nativeEvent;
+      const { clientX, clientY, offsetX, offsetY } = mouseEvent.nativeEvent;
       match(state.value)
         .with('draw', () => {
           if (isNotNil(state.context.selectedShape)) {
@@ -144,7 +144,6 @@ export const WhiteboardCanvas = () => {
           }
         })
         .with('select', () => {
-          const isControlPressed = mouseEvent.ctrlKey || mouseEvent.metaKey;
           const elementAtPosition = getElementAtPosition(
             offsetX,
             offsetY,
@@ -161,7 +160,7 @@ export const WhiteboardCanvas = () => {
                 offsetY: elementOffsetY,
                 position: elementAtPosition.position
               },
-              isMultiSelect: isControlPressed
+              coordinates: { x: offsetX, y: offsetY }
             });
             if (isNotNil(elementAtPosition.position)) {
               match(elementAtPosition.position)
@@ -185,7 +184,7 @@ export const WhiteboardCanvas = () => {
   );
 
   const onMouseMove = useCallback(
-    (mouseEvent: ReactMouseEvent<HTMLCanvasElement, MouseEvent>) => {
+    (mouseEvent: ReactPointerEvent<HTMLCanvasElement>) => {
       const { offsetX, offsetY } = mouseEvent.nativeEvent;
       match(state.value)
         .with('drawing', () => {
@@ -211,57 +210,60 @@ export const WhiteboardCanvas = () => {
             offsetY,
             state.context.elements
           );
-          mouseEvent.currentTarget.style.cursor =
-            isNotNil(elementAtPosition) && isNotNil(elementAtPosition.position)
-              ? cursorForPosition(elementAtPosition.position)
-              : 'default';
+
+          /**
+           * If we haven't detected a position, we default to the default cursor.
+           * If we have detected a position, we set the cursor to the appropriate value.
+           * If we have more than one selected element, we set the cursor to 'move'
+           *    — because we only allow multi-repositioning
+           * otherwise we set the cursor to the appropriate value based on the position.
+           */
+          mouseEvent.currentTarget.style.cursor = isNil(
+            elementAtPosition?.position
+          )
+            ? 'default'
+            : state.context.selectedElements.size > 1
+            ? 'move'
+            : cursorForPosition(elementAtPosition.position);
         })
+
         .with('repositioning', () => {
           if (
             isNonEmptyArray(state.context.elementsInProgress) &&
+            isNotNil(state.context.initialSelectCoordinates) &&
             state.context.selectedElements.size > 0
           ) {
-            // todo: account for multiple elements being detected at a position
-            // const { offsetX: originalOffsetX, offsetY: originalOffsetY } =
-            //   state.context.selectedElements.values().next().value;
-            // const { id, x1, y1, x2, y2, type } =
-            //   state.context.elementInProgress;
-            // const width = x2 - x1;
-            // const height = y2 - y1;
-            // const newX = offsetX - originalOffsetX;
-            // const newY = offsetY - originalOffsetY;
-            // send({
-            //   type: 'continue_repositioning',
-            //   element: {
-            //     id,
-            //     x1: newX,
-            //     y1: newY,
-            //     x2: newX + width,
-            //     y2: newY + height,
-            //     type
-            //   }
-            // });
+            const deltaX = offsetX - state.context.initialSelectCoordinates.x;
+            const deltaY = offsetY - state.context.initialSelectCoordinates.y;
+
             const updatedElements = Array.from(
               state.context.selectedElements
             ).map((selectedElement) => {
-              const { offsetX: originalOffsetX, offsetY: originalOffsetY } =
-                selectedElement;
-              const { id, x1, y1, x2, y2, type } = selectedElement;
-              const width = x2 - x1;
-              const height = y2 - y1;
-              const newX = offsetX - originalOffsetX;
-              const newY = offsetY - originalOffsetY;
-              return {
-                id,
-                x1: newX,
-                y1: newY,
-                x2: newX + width,
-                y2: newY + height,
-                type
-              };
-            });
+              const elementInProgress = state.context.elementsInProgress.find(
+                (el) => el.id === selectedElement.id
+              );
 
-            console.log('moving', updatedElements.length);
+              if (isNotNil(elementInProgress)) {
+                const { id, x1, y1, x2, y2, type } = elementInProgress;
+                const width = x2 - x1;
+                const height = y2 - y1;
+
+                // Calculate new positions based on the original offsets stored when the element was selected
+                const newX = deltaX + selectedElement.x1;
+                const newY = deltaY + selectedElement.y1;
+
+                return {
+                  id,
+                  x1: newX,
+                  y1: newY,
+                  x2: newX + width,
+                  y2: newY + height,
+                  type
+                };
+              } else {
+                return selectedElement;
+              }
+            });
 
             send({
               type: 'continue_repositioning',
@@ -275,9 +277,7 @@ export const WhiteboardCanvas = () => {
             state.context.selectedElements.size > 0
           ) {
             // todo: account for multiple
-            const { position } = state.context.selectedElements
-              .values()
-              .next().value;
+            const { position } = Array.from(state.context.selectedElements)[0];
             console.log('*** position', position);
             const { id, x1, y1, x2, y2, type } =
               state.context.elementsInProgress[0];
@@ -366,9 +366,9 @@ export const WhiteboardCanvas = () => {
           showGrid &&
             'bg-[length:40px_40px] bg-[radial-gradient(circle,_#323232_1px,_transparent_1px)] dark:bg-[radial-gradient(circle,_#5fd7ff_1px,_transparent_1px)]'
         )}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
+        onPointerDown={onMouseDown}
+        onPointerMove={onMouseMove}
+        onPointerUp={onMouseUp}
       ></canvas>
       <div ref={toolbarRef} className="flex items-center justify-between">
         <IconButton

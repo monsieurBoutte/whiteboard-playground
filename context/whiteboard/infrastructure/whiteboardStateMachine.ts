@@ -13,6 +13,7 @@ interface WhiteboardContext {
   selectedShape: Nullable<Shape>;
   elements: Array<WhiteboardElement>;
   elementsInProgress: Array<WhiteboardElement>;
+  initialSelectCoordinates: Nullable<{ x: number; y: number }>;
 }
 
 type WhiteboardEvent =
@@ -27,10 +28,9 @@ type WhiteboardEvent =
   | {
       type: 'select_element';
       element: SelectedWhiteBoardElement;
-      isMultiSelect: boolean;
+      coordinates: { x: number; y: number };
     }
   | { type: 'remove_elements' }
-  | { type: 'deselect_element'; elementId: string }
   | { type: 'deselect_all' }
   | { type: 'start_resizing'; element: WhiteboardElement }
   | { type: 'continue_resizing'; element: WhiteboardElement }
@@ -49,6 +49,7 @@ export const whiteboardStateMachine = createMachine({
   },
   context: {
     selectedElements: new Set<SelectedWhiteBoardElement>(),
+    initialSelectCoordinates: null,
     selectedShape: null,
     elementsInProgress: [],
     elements: []
@@ -60,6 +61,7 @@ export const whiteboardStateMachine = createMachine({
       entry: [
         assign({
           selectedElements: () => new Set<SelectedWhiteBoardElement>(),
+          initialSelectCoordinates: () => null,
           selectedShape: () => null,
           elementsInProgress: () => []
         })
@@ -103,29 +105,22 @@ export const whiteboardStateMachine = createMachine({
       on: {
         select_element: {
           actions: [
-            ({ event }) => {
-              console.log('selecting element', event);
-            },
             assign({
+              initialSelectCoordinates: ({ event }) => event.coordinates,
               selectedElements: ({ context, event }) => {
                 const newSelectedElements = new Set(context.selectedElements);
-                const elementExists = newSelectedElements.has(event.element);
+                const existingElement = Array.from(newSelectedElements).find(
+                  (el) => el.id === event.element.id
+                );
 
-                if (event.isMultiSelect) {
-                  if (elementExists) {
-                    console.log('*** removing element', event.element);
-                    // Remove the element if it already exists in a multi-select scenario
-                    newSelectedElements.delete(event.element);
-                  } else {
-                    console.log('*** adding element', event.element);
-                    // Add the element if it doesn't exist in a multi-select scenario
-                    newSelectedElements.add(event.element);
-                  }
+                if (isNotNil(existingElement)) {
+                  newSelectedElements.delete(existingElement);
+                  // overwrite the existing element with the new position and new coordinates
+                  newSelectedElements.add(event.element);
                 } else {
-                  // Always replace the current selection with the new element, even if it's already selected
-                  newSelectedElements.clear();
                   newSelectedElements.add(event.element);
                 }
+
                 return newSelectedElements;
               }
             })
@@ -133,6 +128,7 @@ export const whiteboardStateMachine = createMachine({
         },
         start_resizing: {
           target: 'resizing',
+          guard: ({ context }) => context.selectedElements.size === 1,
           actions: [
             assign({
               elementsInProgress: ({ event }) => [event.element]
@@ -166,18 +162,15 @@ export const whiteboardStateMachine = createMachine({
                 )
             }),
             assign({
-              selectedElements: () => new Set<SelectedWhiteBoardElement>()
+              selectedElements: () => new Set<SelectedWhiteBoardElement>(),
+              initialSelectCoordinates: () => null
             })
           ]
         },
-        deselect_element: {
-          actions: assign({
-            selectedElements: () => new Set<SelectedWhiteBoardElement>()
-          })
-        },
         deselect_all: {
           actions: assign({
-            selectedElements: () => new Set<SelectedWhiteBoardElement>()
+            selectedElements: () => new Set<SelectedWhiteBoardElement>(),
+            initialSelectCoordinates: () => null
           })
         },
         initiate_draw: {
@@ -365,37 +358,39 @@ export const whiteboardStateMachine = createMachine({
             assign({
               elements: ({ context }) =>
                 context.elements.map((element) => {
-                  if (
-                    isNonEmptyArray(context.elementsInProgress) &&
-                    element.id === context.elementsInProgress[0].id
-                  ) {
-                    // overwrite the previous element with the new attributes
-                    return context.elementsInProgress[0];
-                  }
-                  return element;
+                  const updatedElement = context.elementsInProgress.find(
+                    (inProgressElement) => inProgressElement.id === element.id
+                  );
+
+                  // If an updated element is found, return it; otherwise, return the original element
+                  return updatedElement ? updatedElement : element;
                 }),
               selectedElements: ({ context }) => {
                 const newSelectedElements = new Set<SelectedWhiteBoardElement>(
                   context.selectedElements
                 );
+
                 if (isNonEmptyArray(context.elementsInProgress)) {
-                  const updatedElement = {
-                    ...context.elementsInProgress[0],
-                    offsetX: 0,
-                    offsetY: 0,
-                    position: null
-                  };
+                  context.elementsInProgress.forEach((updatedElement) => {
+                    const elementToUpdate = {
+                      ...updatedElement,
+                      offsetX: 0,
+                      offsetY: 0,
+                      position: null
+                    };
 
-                  // Find and remove the existing element with the same id
-                  newSelectedElements.forEach((el) => {
-                    if (el.id === updatedElement.id) {
-                      newSelectedElements.delete(el);
-                    }
+                    // Find and remove the existing element with the same id
+                    newSelectedElements.forEach((el) => {
+                      if (el.id === elementToUpdate.id) {
+                        newSelectedElements.delete(el);
+                      }
+                    });
+
+                    // Add the updated element
+                    newSelectedElements.add(elementToUpdate);
                   });
-
-                  // Add the updated element
-                  newSelectedElements.add(updatedElement);
                 }
+
                 return newSelectedElements;
               }
             }),

@@ -153,7 +153,8 @@ export const drawElement = (
   context: CanvasRenderingContext2D,
   element: WhiteboardElement,
   color: string,
-  isFocused: boolean = false
+  isFocused: boolean = false,
+  isMultiSelect: boolean = false
 ) => {
   const { type, x1, y1, x2, y2 } = element;
   context.beginPath();
@@ -204,9 +205,11 @@ export const drawElement = (
 
     context.fillStyle = 'white';
     context.strokeStyle = 'blue';
-    handles.forEach((handle) => {
-      context.fillRect(handle.x, handle.y, handleSize, handleSize);
-      context.strokeRect(handle.x, handle.y, handleSize, handleSize);
-    });
+    if (!isMultiSelect) {
+      handles.forEach((handle) => {
+        context.fillRect(handle.x, handle.y, handleSize, handleSize);
+        context.strokeRect(handle.x, handle.y, handleSize, handleSize);
+      });
+    }
   }
 };
