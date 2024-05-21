@@ -1,4 +1,4 @@
-import { Nullable } from '@/shared/application/type-utils';
+import { Nullable } from '@/shared/domain/type-utils';
 
 export type Shape = 'circle' | 'rectangle';
 

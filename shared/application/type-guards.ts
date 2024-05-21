@@ -1,5 +1,10 @@
 import { UnknownRecord } from 'type-fest';
-import { Nil, Nilable, NonEmptyArray, Undefinable } from './type-utils';
+import {
+  Nil,
+  Nilable,
+  NonEmptyArray,
+  Undefinable
+} from '@/shared/domain/type-utils';
 
 export const isNull = (x: unknown): x is null => x === null;
 

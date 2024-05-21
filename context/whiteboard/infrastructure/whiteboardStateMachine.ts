@@ -1,4 +1,4 @@
-import { Nullable } from '@/shared/application/type-utils';
+import { Nullable } from '@/shared/domain/type-utils';
 import { createMachine, assign } from 'xstate';
 import { isNonEmptyArray, isNotNil } from '@/shared/application/type-guards';
 import { adjustElementCoordinates } from '@/context/whiteboard/application';

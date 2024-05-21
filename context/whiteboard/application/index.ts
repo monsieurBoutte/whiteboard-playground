@@ -1,6 +1,6 @@
 import { match } from 'ts-pattern';
 import { Position, WhiteboardElement } from '@/context/whiteboard/domain';
-import { Nullable } from '@/shared/application/type-utils';
+import { Nullable } from '@/shared/domain/type-utils';
 import { isNotNil } from '@/shared/application/type-guards';
 import { noOpFn } from '@/shared/application/utils';
 
