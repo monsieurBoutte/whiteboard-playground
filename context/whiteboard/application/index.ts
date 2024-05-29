@@ -38,30 +38,22 @@ export const positionWithinElement = (
   const maxX = Math.max(x1, x2);
   const minY = Math.min(y1, y2);
   const maxY = Math.max(y1, y2);
-  return match(type)
-    .returnType<Nullable<string>>()
-    .with('rectangle', () => {
-      const topLeft = nearPoint(x, y, minX, minY, 'tl');
-      const topRight = nearPoint(x, y, maxX, minY, 'tr');
-      const bottomLeft = nearPoint(x, y, minX, maxY, 'bl');
-      const bottomRight = nearPoint(x, y, maxX, maxY, 'br');
-      const inside =
-        x >= minX && x <= maxX && y >= minY && y <= maxY ? 'inside' : null;
-      return topLeft || topRight || bottomLeft || bottomRight || inside;
-    })
-    .with('circle', () => {
-      const width = maxX - minX;
-      const height = maxY - minY;
-      const radius = Math.min(width, height) / 2;
-      const centerX = minX + radius;
-      const centerY = minY + radius;
-      const inside =
-        distance({ x, y }, { x: centerX, y: centerY }) <= radius
-          ? 'inside'
-          : null;
-      return inside;
-    })
-    .exhaustive();
+  return (
+    match(type)
+      .returnType<Nullable<string>>()
+      // both rectangle and circle have the same logic for determining if a point is within their bounding box
+      // the bounding box is what appears on selection and allows the user to reposition and resize the element
+      .with('rectangle', 'circle', () => {
+        const topLeft = nearPoint(x, y, minX, minY, 'tl');
+        const topRight = nearPoint(x, y, maxX, minY, 'tr');
+        const bottomLeft = nearPoint(x, y, minX, maxY, 'bl');
+        const bottomRight = nearPoint(x, y, maxX, maxY, 'br');
+        const inside =
+          x >= minX && x <= maxX && y >= minY && y <= maxY ? 'inside' : null;
+        return topLeft || topRight || bottomLeft || bottomRight || inside;
+      })
+      .exhaustive()
+  );
 };
 
 export const getElementAtPosition = (
